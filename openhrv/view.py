@@ -188,12 +188,13 @@ class View(QMainWindow):
 
         self.save_recording_button = QPushButton("Save")
         self.save_recording_button.clicked.connect(self.logger.save_recording)
+        
+        self.pain_start_button = QPushButton("Pain Start")
+        self.pain_start_button.clicked.connect(self.emit_pain_start_event)
 
-        self.annotation = QComboBox()
-        self.annotation.setEditable(True)
-        self.annotation.setDuplicatesEnabled(False)
-        self.annotation_button = QPushButton("Annotate")
-        self.annotation_button.clicked.connect(self.emit_annotation)
+        self.pain_end_button = QPushButton("Pain End")
+        self.pain_end_button.clicked.connect(self.emit_pain_end_event)
+
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
 
@@ -233,8 +234,8 @@ class View(QMainWindow):
         self.recording_config.addWidget(self.save_recording_button, 0, 1)
         self.recording_config.addWidget(self.recording_statusbar, 0, 2)
         # row, column, rowspan, columnspan
-        self.recording_config.addWidget(self.annotation, 1, 0, 1, 2)
-        self.recording_config.addWidget(self.annotation_button, 1, 2)
+        self.recording_config.addWidget(self.pain_start_button, 1, 0)
+        self.recording_config.addWidget(self.pain_end_button, 1, 1)
         self.recording_panel = QGroupBox("Recording")
         self.recording_panel.setLayout(self.recording_config)
         self.hlayout1.addWidget(self.recording_panel, stretch=25)
@@ -311,4 +312,14 @@ class View(QMainWindow):
     def emit_annotation(self):
         self.signals.annotation.emit(
             NamedSignal("Annotation", self.annotation.currentText())
+        )
+        
+    def emit_pain_start_event(self):
+        self.signals.annotation.emit(
+            NamedSignal("Pain", "start")
+        )
+        
+    def emit_pain_end_event(self):
+        self.signals.annotation.emit(
+            NamedSignal("Pain", "end")
         )
