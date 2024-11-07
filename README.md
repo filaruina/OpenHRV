@@ -1,6 +1,12 @@
-<img src="https://github.com/JanCBrammer/OpenHRV/raw/main/docs/logo.png" width="125" height="125" />
+# Fork info
+
+This fork contains some modifications for a research project using H10 straps.
+- Removed pacer. Not needed
+- Removed annotate in favor of more explicit buttons for pain start/end
 
 # OpenHRV
+
+<img src="https://github.com/JanCBrammer/OpenHRV/raw/main/docs/logo.png" width="125" height="125" />
 
 A desktop application for heart rate variability (HRV) biofeedback training with
 Polar chest straps (H7, H9, H10).
