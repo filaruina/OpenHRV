@@ -189,11 +189,9 @@ class View(QMainWindow):
         self.save_recording_button = QPushButton("Save")
         self.save_recording_button.clicked.connect(self.logger.save_recording)
         
-        self.pain_start_button = QPushButton("Pain Start")
-        self.pain_start_button.clicked.connect(self.emit_pain_start_event)
-
-        self.pain_end_button = QPushButton("Pain End")
-        self.pain_end_button.clicked.connect(self.emit_pain_end_event)
+        self.pain_started = False
+        self.pain_button = QPushButton("Pain Start")
+        self.pain_button.clicked.connect(self.emit_pain_event)
 
         self.central_widget = QWidget()
         self.setCentralWidget(self.central_widget)
@@ -234,8 +232,7 @@ class View(QMainWindow):
         self.recording_config.addWidget(self.save_recording_button, 0, 1)
         self.recording_config.addWidget(self.recording_statusbar, 0, 2)
         # row, column, rowspan, columnspan
-        self.recording_config.addWidget(self.pain_start_button, 1, 0)
-        self.recording_config.addWidget(self.pain_end_button, 1, 1)
+        self.recording_config.addWidget(self.pain_button, 1, 0, 1, 0)
         self.recording_panel = QGroupBox("Recording")
         self.recording_panel.setLayout(self.recording_config)
         self.hlayout1.addWidget(self.recording_panel, stretch=25)
@@ -316,10 +313,21 @@ class View(QMainWindow):
         
     def emit_pain_start_event(self):
         self.signals.annotation.emit(
-            NamedSignal("Pain", "start")
+            NamedSignal("Pain", "star")
         )
         
     def emit_pain_end_event(self):
         self.signals.annotation.emit(
             NamedSignal("Pain", "end")
         )
+        
+    def emit_pain_event(self):
+        # Ignore press if file is not being recorded
+        if not self.logger.file:
+            return
+        
+        self.pain_started = not self.pain_started
+        self.signals.annotation.emit(
+            NamedSignal("Pain", "start" if self.pain_started else "end")
+        )
+        self.pain_button.setText("Pain End" if self.pain_started else "Pain Start")
