@@ -24,7 +24,6 @@ from typing import Iterable
 from openhrv.utils import valid_address, valid_path, get_sensor_address, NamedSignal
 from openhrv.sensor import SensorScanner, SensorClient
 from openhrv.logger import Logger
-from openhrv.pacer import Pacer
 from openhrv.model import Model
 from openhrv.config import (
     breathing_rate_to_tick,
@@ -44,63 +43,6 @@ WHITE = QColor(255, 255, 255)
 GREEN = QColor(0, 255, 0)
 YELLOW = QColor(255, 255, 0)
 RED = QColor(255, 0, 0)
-
-
-class PacerWidget(QChartView):
-    def __init__(
-        self, x_values: Iterable[float], y_values: Iterable[float], color: QColor = BLUE
-    ):
-        super().__init__()
-
-        self.setSizePolicy(
-            QSizePolicy(
-                QSizePolicy.Fixed,  # enforce self.sizeHint by fixing horizontal (width) policy
-                QSizePolicy.Preferred,
-            )
-        )
-
-        self.plot = QChart()
-        self.plot.legend().setVisible(False)
-        self.plot.setBackgroundRoundness(0)
-        self.plot.setMargins(QMargins(0, 0, 0, 0))
-
-        self.disc_circumference_coord = QSplineSeries()
-        self._instantiate_series(x_values, y_values)
-        self.disk = QAreaSeries(self.disc_circumference_coord)
-        self.disk.setColor(color)
-        self.plot.addSeries(self.disk)
-
-        self.x_axis = QValueAxis()
-        self.x_axis.setRange(-1, 1)
-        self.x_axis.setVisible(False)
-        self.plot.addAxis(self.x_axis, Qt.AlignBottom)
-        self.disk.attachAxis(self.x_axis)
-
-        self.y_axis = QValueAxis()
-        self.y_axis.setRange(-1, 1)
-        self.y_axis.setVisible(False)
-        self.plot.addAxis(self.y_axis, Qt.AlignLeft)
-        self.disk.attachAxis(self.y_axis)
-
-        self.setChart(self.plot)
-
-    def _instantiate_series(self, x_values: Iterable[float], y_values: Iterable[float]):
-        for x, y in zip(x_values, y_values):
-            self.disc_circumference_coord.append(x, y)
-
-    def update_series(self, x_values: Iterable[float], y_values: Iterable[float]):
-        for i, (x, y) in enumerate(zip(x_values, y_values)):
-            self.disc_circumference_coord.replace(i, x, y)
-
-    def sizeHint(self):
-        height = self.size().height()
-        return QSize(height, height)  # force square aspect ratio
-
-    def resizeEvent(self, event):
-        if self.size().width() != self.size().height():
-            self.updateGeometry()  # adjusts geometry based on sizeHint
-        return super().resizeEvent(event)
-
 
 class XYSeriesWidget(QChartView):
     def __init__(
@@ -164,15 +106,9 @@ class View(QMainWindow):
         self.model.ibis_buffer_update.connect(self.plot_ibis)
         self.model.mean_hrv_update.connect(self.plot_hrv)
         self.model.addresses_update.connect(self.list_addresses)
-        self.model.pacer_rate_update.connect(self.update_pacer_label)
         self.model.hrv_target_update.connect(self.update_hrv_target)
 
         self.signals = ViewSignals()
-
-        self.pacer = Pacer()
-        self.pacer_timer = QTimer()
-        self.pacer_timer.setInterval(int(1 / 8 * 1000))  # redraw pacer at 8Hz
-        self.pacer_timer.timeout.connect(self.plot_pacer_disk)
 
         self.scanner = SensorScanner()
         self.scanner.sensor_update.connect(self.model.update_sensors)
@@ -192,7 +128,6 @@ class View(QMainWindow):
 
         self.model.ibis_buffer_update.connect(self.logger.write_to_file)
         self.model.addresses_update.connect(self.logger.write_to_file)
-        self.model.pacer_rate_update.connect(self.logger.write_to_file)
         self.model.hrv_target_update.connect(self.logger.write_to_file)
         self.model.mean_hrv_update.connect(self.logger.write_to_file)
         self.signals.annotation.connect(self.logger.write_to_file)
@@ -228,23 +163,6 @@ class View(QMainWindow):
         brush = QBrush(colorgrad)
         self.hrv_widget.plot.setPlotAreaBackgroundBrush(brush)
         self.hrv_widget.plot.setPlotAreaBackgroundVisible(True)
-
-        self.pacer_widget = PacerWidget(*self.pacer.update(self.model.breathing_rate))
-
-        self.pacer_label = QLabel()
-        self.pacer_rate = QSlider(Qt.Horizontal)
-        self.pacer_rate.setTickPosition(QSlider.TicksBelow)
-        self.pacer_rate.setTracking(False)
-        self.pacer_rate.setRange(
-            breathing_rate_to_tick(MIN_BREATHING_RATE),
-            breathing_rate_to_tick(MAX_BREATHING_RATE),
-        )
-        self.pacer_rate.valueChanged.connect(self.model.update_breathing_rate)
-        self.pacer_rate.setValue(breathing_rate_to_tick(MAX_BREATHING_RATE))
-
-        self.pacer_toggle = QCheckBox("Show pacer", self)
-        self.pacer_toggle.setChecked(True)
-        self.pacer_toggle.stateChanged.connect(self.toggle_pacer)
 
         self.hrv_target_label = QLabel(f"Target: {self.model.hrv_target}")
 
@@ -289,7 +207,6 @@ class View(QMainWindow):
 
         self.hlayout0 = QHBoxLayout()
         self.hlayout0.addWidget(self.ibis_widget)
-        self.hlayout0.addWidget(self.pacer_widget)
         self.vlayout0.addLayout(self.hlayout0, stretch=50)
 
         self.vlayout0.addWidget(self.hrv_widget, stretch=50)
@@ -311,13 +228,6 @@ class View(QMainWindow):
         self.hrv_panel.setLayout(self.hrv_config)
         self.hlayout1.addWidget(self.hrv_panel, stretch=25)
 
-        self.pacer_config = QFormLayout()
-        self.pacer_config.addRow(self.pacer_label, self.pacer_rate)
-        self.pacer_config.addRow(self.pacer_toggle)
-        self.pacer_panel = QGroupBox("Breathing Pacer")
-        self.pacer_panel.setLayout(self.pacer_config)
-        self.hlayout1.addWidget(self.pacer_panel, stretch=25)
-
         self.recording_config = QGridLayout()
         self.recording_config.addWidget(self.start_recording_button, 0, 0)
         self.recording_config.addWidget(self.save_recording_button, 0, 1)
@@ -332,7 +242,6 @@ class View(QMainWindow):
         self.vlayout0.addLayout(self.hlayout1)
 
         self.logger_thread.start()
-        self.pacer_timer.start()
 
     def closeEvent(self, _):
         """Shut down all threads."""
@@ -386,20 +295,9 @@ class View(QMainWindow):
         self.address_menu.clear()
         self.address_menu.addItems(addresses.value)
 
-    def plot_pacer_disk(self):
-        coordinates = self.pacer.update(self.model.breathing_rate)
-        self.pacer_widget.update_series(*coordinates)
-
-    def update_pacer_label(self, rate: NamedSignal):
-        self.pacer_label.setText(f"Rate: {rate.value}")
-
     def update_hrv_target(self, target: NamedSignal):
         self.hrv_widget.y_axis.setRange(0, target.value)
         self.hrv_target_label.setText(f"Target: {target.value}")
-
-    def toggle_pacer(self):
-        visible = self.pacer_widget.isVisible()
-        self.pacer_widget.setVisible(not visible)
 
     def show_recording_status(self, status: int):
         """Indicate busy state if `status` is 0."""
